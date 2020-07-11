@@ -2,7 +2,6 @@
 Simple test for the USB relay DLL
 Just plain calling the C library, no fancy OOP stuff
 Uses CTYPES
-
 For python 2.7, 3
 """
 import sys, os, time
@@ -11,8 +10,16 @@ import ctypes
 print("Running on Python v." + str(sys.version))
 print("%d-bit mode" % ({4:32, 8:64}[ctypes.sizeof(ctypes.c_void_p)]) )
 
+# Angelo can edit from here 
+
+
 # Fix the path below if the library is not in current dir.
-libpath = "."
+libpath = "../lib/"
+
+relay1_time = 5 # relay 1 time in milliseconds
+relay2_time = 5 # relay 2 time in milliseconds
+
+# to here
 
 if sys.version_info.major >= 3:
   def charpToString(charp):
@@ -142,7 +149,7 @@ def unloadLib():
   L.dll = None
   print("Lib closed")
   
-def testR2():
+def control():
   """ Test one device with handle hdev, 1 or 2 channels """
   global numch, hdev
   if numch <=0 or numch > 8:
@@ -170,7 +177,7 @@ def testR2():
   if numch > 1:
     time.sleep(1)
     ret = L.usb_relay_device_open_one_relay_channel(hdev,2)
-    if ret != 0: failed("Failed R2 on!")
+    if ret != 0: fail("Failed R2 on!")
     mask |= 0x2
 
   #Note: Checking relay state after successful open/close is redundant, because the library does it.
@@ -179,22 +186,43 @@ def testR2():
   if st != mask:
       fail("Bad state after relays on!")
 
-  # Delays here are only for test, not really needed
-  time.sleep(1)
 
-  ret = L.usb_relay_device_close_all_relay_channel(hdev)
-  if ret != 0:
-     fail("Failed OFF all!")
+  first_relay_off = 1
+  if relay2_time < relay1_time:
+    first_relay_off = 2
+  
+  if first_relay_off == 1:
+    time.sleep(relay1_time)
+    ret = L.usb_relay_device_close_one_relay_channel(hdev, 1)
+    if ret != 0: fail("Failed OFF channel 1")
+    mask |= 0x1
+
+    time.sleep(relay2_time - relay1_time)
+    ret = L.usb_relay_device_close_one_relay_channel(hdev, 2)
+    if ret != 0: fail("Failed OFF channel 2")
+    mask |= 0x2
+  elif first_relay_off == 2:
+    time.sleep(relay2_time)
+    ret = L.usb_relay_device_close_one_relay_channel(hdev, 2)
+    if ret != 0: fail("Failed OFF channel 2")
+    mask |= 0x2
+
+    time.sleep(relay1_time - relay2_time)
+    ret = L.usb_relay_device_close_one_relay_channel(hdev, 1)
+    if ret != 0: fail("Failed OFF channel 1")
+    mask |= 0x1
+  else:
+    ret = L.usb_relay_device_close_all_relay_channel(hdev)
+    fail("Invalid OFF sequence")
 
   st = L.usb_relay_device_get_status_bitmap(hdev)  
   if st != 0:
       fail("Bad state after all off!")
 
-  print("*** test R2 PASS ***")
   
 # main
 def main():
-  print("Test 2-ch relay")
+  print("Angelo's magical relay on-off-inator")
   loadLib()
   getLibFunctions()
   try:
@@ -204,7 +232,7 @@ def main():
       # Test any 1st found dev .
       print("Testing relay with ID=" + devids[0])
       openDevById(devids[0])
-      testR2()
+      control()
       closeDev()
   finally:  
     unloadLib()
